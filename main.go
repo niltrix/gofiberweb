@@ -10,8 +10,8 @@ import (
 )
 
 type Subscription struct {
-	Name    string `json: "name"`
-	Product string `json: "product"`
+	Name    string `json:"name"`
+	Product string `json:"product"`
 }
 
 func getSubscription(c *fiber.Ctx) error {
