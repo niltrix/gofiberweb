@@ -42,7 +42,7 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		Prefork: true,
+		// Prefork: true,
 	})
 	app.Use(logger.New())
 	app.Use(requestid.New(requestid.Config{
