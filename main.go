@@ -1,10 +1,21 @@
 package main
 
 import (
+	"context"
+	// "context"
 	"fmt"
+	"github.com/gofiber/fiber/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	stdout "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	oteltrace "go.opentelemetry.io/otel/trace"
+	"log"
 	"os"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
@@ -26,14 +37,28 @@ func createSubscription(c *fiber.Ctx) error {
 	subs := new(Subscription)
 	err := c.BodyParser(subs)
 	if err != nil {
-		c.Status(fiber.StatusBadRequest).SendString(err.Error())
+		err := c.Status(fiber.StatusBadRequest).SendString(err.Error())
+		if err != nil {
+			fmt.Printf("Error : [%s]", err)
+		}
 		return err
 	}
 
 	return c.Status(fiber.StatusOK).JSON(subs)
 }
 
+var tracer = otel.Tracer("fiber-server")
+
 func main() {
+	tp := initTracer()
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+	}()
+	// context = context.Background()
+	// provider, err := oidc.NewProvider(context, "https://")
+
 	// Print current process
 	if fiber.IsChild() {
 		fmt.Printf("[%d] Child\n", os.Getppid())
@@ -49,12 +74,37 @@ func main() {
 		Header: "x-request-id",
 	}))
 
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hello")
+	app.Get("/", func(ctx *fiber.Ctx) error {
+		_, span := tracer.Start(ctx.UserContext(), "getUser", oteltrace.WithAttributes(attribute.String("id", ctx.BaseURL())))
+		defer span.End()
+		return ctx.SendString("Hello")
 	})
 
 	app.Get("/subscription", getSubscription)
 	app.Post("/subscription", createSubscription)
 
-	app.Listen(":8080")
+	err := app.Listen(":8080")
+	if err != nil {
+		fmt.Printf("Error : [%s]", err)
+	}
+}
+
+func initTracer() *sdktrace.TracerProvider {
+	exporter, err := stdout.New(stdout.WithPrettyPrint())
+	//exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://localhost:14268/api/traces")))
+	if err != nil {
+		log.Fatal(err)
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(
+			resource.NewWithAttributes(
+				semconv.SchemaURL,
+				semconv.ServiceNameKey.String("my-service"),
+			)),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	return tp
 }
