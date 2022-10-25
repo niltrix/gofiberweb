@@ -4,6 +4,9 @@ import (
 	"context"
 	// "context"
 	"fmt"
+	"log"
+	"os"
+
 	"github.com/gofiber/fiber/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -13,8 +16,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
-	"log"
-	"os"
 
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
@@ -56,6 +57,8 @@ func main() {
 			log.Printf("Error shutting down tracer provider: %v", err)
 		}
 	}()
+
+	// ODIC configuration
 	// context = context.Background()
 	// provider, err := oidc.NewProvider(context, "https://")
 
